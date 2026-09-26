@@ -1,0 +1,20 @@
+{
+  "name": "Maalam PH",
+  "short_name": "Maalam PH",
+  "description": "A 3D learning adventure for Filipino preschoolers: colors, numbers, shapes, letters, sounds and reading.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fcd116",
+  "theme_color": "#0038a8",
+  "lang": "en-PH",
+  "categories": ["education", "games", "kids"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
