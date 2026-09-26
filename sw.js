@@ -1,7 +1,7 @@
 /* Maalam PH service worker.
    When you upload a new version of the game, change VERSION (for example v2 → v3)
    so every family's device downloads the new files. */
-const VERSION = 'maalam-app-v1';
+const VERSION = 'maalam-app-v3';
 const FONTS = 'maalam-fonts-v1';
 const MEDIA = 'maalam-media-v1';          // pictures + voices saved by the game (kept across updates)
 const SHELL = [
