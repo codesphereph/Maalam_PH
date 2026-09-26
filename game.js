@@ -60,10 +60,18 @@ async function server(fn, ...args) {
   try {
     res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ fn, args }), redirect: 'follow', cache: 'no-store' });
-  } catch (e) { throw new Error('OFFLINE: You are offline. Connect to the internet and try again.'); }
-  if (!res.ok) throw new Error('OFFLINE: The game server did not answer (' + res.status + '). Please try again.');
+  } catch (e) {
+    // Online but blocked = the server sent an error page (old deployment, missing permission, or access not "Anyone").
+    G.serverBlocked = navigator.onLine;
+    throw new Error(navigator.onLine
+      ? 'OFFLINE: Cannot reach the Maalam PH server right now. Please try again in a moment.'
+      : 'OFFLINE: You are offline. Connect to the internet and try again.');
+  }
+  if (!res.ok) { G.serverBlocked = true; throw new Error('OFFLINE: The game server did not answer (' + res.status + '). Please try again.'); }
   let j;
-  try { j = await res.json(); } catch (e) { throw new Error('OFFLINE: The game server sent an unexpected reply. Please try again.'); }
+  try { j = await res.json(); }
+  catch (e) { G.serverBlocked = true; throw new Error('OFFLINE: The game server sent a page instead of an answer. Please try again in a moment.'); }
+  G.serverBlocked = false;
   if (!j.ok) throw new Error(j.error || 'Something went wrong.');
   return j.result;
 }
@@ -2131,6 +2139,36 @@ async function playScene(id, fromStep = 0) {
 }
 
 /* ---------------- boot ---------------- */
+/**
+ * Makes sure every screen element the game needs exists, even if the page (Index / index.html)
+ * is an older version. Missing pieces are created instead of crashing the game.
+ */
+(function ensureDom() {
+  const make = (tag, attrs, parent, before) => {
+    const el = document.createElement(tag);
+    Object.keys(attrs).forEach(k => { if (k === 'html') el.innerHTML = attrs[k]; else el.setAttribute(k, attrs[k]); });
+    (parent || document.body).insertBefore(el, before || null);
+    return el;
+  };
+  let hud = $('hud');
+  if (!hud) hud = make('div', { id: 'hud', class: 'hidden' });
+  const sound = $('hSound') || make('button', { id: 'hSound', class: 'toy', 'aria-label': 'Sound on or off', html: '🔊' }, hud);
+  const pills = [['hHearts', '❤️❤️❤️❤️❤️'], ['hLevel', '⭐ Lv 1'], ['hGems', '💎 0'], ['hStrike', '⚔️ 5']];
+  pills.forEach(([id, txt]) => { if (!$(id)) make('div', { id, class: 'pill', html: txt }, hud, sound); });
+  if (!$('hMagic')) make('div', { class: 'pill', html: '<span>🔮</span><div class="bar mg"><i id="hMagic"></i></div><b id="hMagicN">0</b>' }, hud, sound);
+  if (!$('hPower')) make('div', { class: 'pill', html: '<span>⚡</span><div class="bar"><i id="hPower"></i></div>' }, hud, sound);
+  if (!$('hTokens')) make('button', { id: 'hTokens', class: 'pill tokbtn hidden', 'aria-label': 'Tokens. Tap to top up',
+    html: '🪙 <b id="hTokN">0</b> <span class="plus">＋</span>' }, hud, sound);
+  if (!$('hTokN')) make('b', { id: 'hTokN', html: '0' }, $('hTokens'));
+  if (!$('hBuff')) make('div', { id: 'hBuff', class: 'pill hidden' }, hud, sound);
+  if (!$('hNet')) make('div', { id: 'hNet', class: 'pill hidden', title: 'Offline', html: '📴 Offline' }, hud, sound);
+  ['enemy', 'toast', 'banner', 'panel', 'overlay', 'video', 'installBar'].forEach(id => {
+    if (!$(id)) make('div', { id, class: ['toast', 'panel', 'overlay'].includes(id) ? '' : 'hidden' });
+  });
+  const tb = $('hTokens');                                   // old pages: give the coin button a basic look
+  if (tb && getComputedStyle(tb).pointerEvents === 'none') tb.style.pointerEvents = 'auto';
+})();
+
 $('hTokens').onclick = async () => {
   if (!G.account || G.account.status !== 'active') return;
   if (G.screen === 'map') { hush(); await showTopUp(); renderMapCard(); return; }
@@ -2155,9 +2193,17 @@ async function boot() {
   try {
     G.data = await loadGameData();
   } catch (e) {
-    overlay(`<div class="card">${LOGO_HTML()}<h2>${isOfflineError(e) ? 'Connect to the internet once' : "The game data didn't load"}</h2>
-      <p>${isOfflineError(e) ? 'The first time, Maalam PH needs the internet to download the game. After that, it can play offline.'
+    const blocked = IS_PWA && G.serverBlocked;
+    overlay(`<div class="card">${LOGO_HTML()}
+      <h2>${blocked ? 'The game server is not answering' : isOfflineError(e) ? 'Connect to the internet once' : "The game data didn't load"}</h2>
+      <p>${blocked ? 'Please try again in a moment. If this keeps happening, tell the Maalam PH team.'
+        : isOfflineError(e) ? 'The first time, Maalam PH needs the internet to download the game. After that, it can play offline.'
         : 'Run initializeSheet in Apps Script once, then open the game again.'}</p>
+      ${blocked ? `<details class="small" style="text-align:left"><summary>For the owner</summary>
+        <p class="small">The browser was blocked by the Apps Script link (CORS). In Apps Script: run <b>checkSetup</b> and allow
+        the permissions, then <b>Deploy → Manage deployments → ✏️ Edit → New version → Deploy</b> with
+        <b>Execute as: Me</b> and <b>Who has access: Anyone</b>. This link must then show {"ok":true…}:</p>
+        <p class="small"><a href="${API_URL}?ping=1" target="_blank" rel="noopener">Open the server check</a></p></details>` : ''}
       <p style="font-size:15px;opacity:.7">${esc(errText(e))}</p>
       <div class="row"><button class="toy big" onclick="location.reload()">Try again</button></div></div>`);
     return;
